@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tooling
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+mutants/
+.mutmut-cache
+
+# Dependencies are pinned in requirements*.txt (see `make lock`)
+uv.lock
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal

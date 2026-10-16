@@ -1,0 +1,78 @@
+name: fleet
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches:
+      - main
+      - "fleet/train/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    name: fleet/tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The default pull_request checkout is a merge commit; test the PR head itself.
+      - name: Check out the commit under test
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: false
+
+      - name: Install dependencies
+        id: setup
+        run: make setup
+
+      - name: Lint, type-check and test
+        run: scripts/ci_evidence.sh
+
+      - name: Report setup failure
+        if: failure() && steps.setup.outcome == 'failure'
+        run: echo "::error title=fleet-verdict::UNKNOWN make setup failed at ${SHA_UNDER_TEST:0:12}"
+        env:
+          SHA_UNDER_TEST: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  repro:
+    name: fleet/repro
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'type:bug')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the PR head with full history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: false
+
+      - name: Install dependencies
+        id: setup
+        run: make setup
+
+      - name: New tests fail on the base and pass at the head
+        run: scripts/repro.sh
+
+      - name: Report setup failure
+        if: failure() && steps.setup.outcome == 'failure'
+        run: echo "::error title=fleet-verdict::UNKNOWN make setup failed at ${SHA_UNDER_TEST:0:12}"
+        env:
+          SHA_UNDER_TEST: ${{ github.event.pull_request.head.sha }}
