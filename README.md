@@ -24,7 +24,7 @@ The database file is created and migrated on startup.
 | Variable | Default | Meaning |
 | :--- | :--- | :--- |
 | `LIBRARY_DB` | `library.db` | SQLite file |
-| `LIBRARY_ADMIN_KEY` | unset | Key that admin endpoints expect in the `X-API-Key` header |
+| `LIBRARY_ADMIN_KEY` | unset | Key that admin endpoints expect in the `X-API-Key` header; if unset, admin endpoints refuse all requests |
 | `LIBRARY_LOAN_DAYS` | `14` | Loan period, also used for renewals |
 | `LIBRARY_MAX_ACTIVE_LOANS` | `5` | Books a member may have out at once |
 | `LIBRARY_FINE_GRACE_DAYS` | `3` | Days late before a fine applies |
@@ -61,9 +61,9 @@ served at `/docs`.
 | GET | `/reports/summary` | admin | Catalog, member, loan and fine totals: `books`, `members`, `loans`, `outstanding_fines_cents` |
 | GET | `/reports/popular?days=30&limit=10` | admin | Most borrowed books: `book_id`, `title`, `author`, `loans` |
 
-Errors are JSON objects with a `detail` field: `401` for a missing or wrong admin
-key, `404` for unknown ids, `409` when a library rule forbids the request and `422`
-for invalid input. Money is in cents. Dates and times are UTC.
+Errors are JSON objects with a `detail` field: `401` for a missing, wrong or
+unconfigured admin key, `404` for unknown ids, `409` when a library rule forbids
+the request and `422` for invalid input. Money is in cents. Dates and times are UTC.
 
 ## Library rules
 
