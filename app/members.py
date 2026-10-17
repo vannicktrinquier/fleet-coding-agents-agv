@@ -2,7 +2,7 @@
 
 import sqlite3
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, status
 
@@ -10,11 +10,12 @@ from app.auth import require_admin
 from app.db import timestamp
 from app.deps import ClockDep, ConnDep
 from app.errors import Conflict, NotFound
-from app.models import Member, MemberCreate, MemberUpdate
+from app.models import Loan, Member, MemberCreate, MemberUpdate
 
 router = APIRouter(prefix="/members", tags=["members"])
 
 _COLUMNS = "id, name, email, active, created_at"
+_LOAN_COLUMNS = "id, book_id, member_id, loaned_at, due_on, returned_at, renewals, fine_cents"
 
 
 def _email_taken(conn: sqlite3.Connection, email: str, exclude_id: int | None = None) -> bool:
@@ -69,6 +70,28 @@ def deactivate_member(conn: sqlite3.Connection, member_id: int) -> Member:
     return get_member(conn, member_id)
 
 
+def list_member_loans(
+    conn: sqlite3.Connection,
+    member_id: int,
+    status: Literal["open", "returned"] | None = None,
+) -> list[Loan]:
+    get_member(conn, member_id)
+    condition = ""
+    if status == "open":
+        condition = " AND returned_at IS NULL"
+    elif status == "returned":
+        condition = " AND returned_at IS NOT NULL"
+    rows = conn.execute(
+        f"""
+        SELECT {_LOAN_COLUMNS} FROM loans
+        WHERE member_id = ?{condition}
+        ORDER BY loaned_at DESC, id DESC
+        """,
+        (member_id,),
+    ).fetchall()
+    return [Loan.model_validate(row) for row in rows]
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def register(data: MemberCreate, conn: ConnDep, clock: ClockDep) -> Member:
     return create_member(conn, data, clock.now())
@@ -77,6 +100,15 @@ def register(data: MemberCreate, conn: ConnDep, clock: ClockDep) -> Member:
 @router.get("/{member_id}")
 def get_one(member_id: int, conn: ConnDep) -> Member:
     return get_member(conn, member_id)
+
+
+@router.get("/{member_id}/loans")
+def get_loans(
+    member_id: int,
+    conn: ConnDep,
+    status: Literal["open", "returned"] | None = None,
+) -> list[Loan]:
+    return list_member_loans(conn, member_id, status=status)
 
 
 @router.patch("/{member_id}")

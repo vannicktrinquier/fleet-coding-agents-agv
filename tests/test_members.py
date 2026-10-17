@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app.clock import FixedClock
 from tests.support import Library
 
 
@@ -95,3 +98,113 @@ def test_deactivation_needs_the_admin_key(client: TestClient, library: Library) 
 
     assert response.status_code == 401
     assert client.get(f"/members/{member['id']}").json()["active"] is True
+
+
+def test_member_loans_returns_json_list_newest_first(
+    client: TestClient, library: Library, clock: FixedClock
+) -> None:
+    member = library.member()
+
+    response = client.get(f"/members/{member['id']}/loans")
+    assert response.status_code == 200
+    assert response.json() == []
+
+    book1 = library.book()
+    book2 = library.book()
+    book3 = library.book()
+
+    loan1 = library.checkout(book1["id"], member["id"])
+    clock.advance(hours=1)
+    loan2 = library.checkout(book2["id"], member["id"])
+    clock.advance(hours=1)
+    loan3 = library.checkout(book3["id"], member["id"])
+
+    response = client.get(f"/members/{member['id']}/loans")
+    assert response.status_code == 200
+    loans = response.json()
+    assert len(loans) == 3
+
+    assert loans[0]["id"] == loan3["id"]
+    assert loans[1]["id"] == loan2["id"]
+    assert loans[2]["id"] == loan1["id"]
+
+    for loan in loans:
+        single_loan = client.get(f"/loans/{loan['id']}").json()
+        assert loan == single_loan
+
+
+def test_member_loans_tie_break_newest_first_at_same_timestamp(
+    client: TestClient, library: Library
+) -> None:
+    member = library.member()
+    book1 = library.book()
+    book2 = library.book()
+
+    loan1 = library.checkout(book1["id"], member["id"])
+    loan2 = library.checkout(book2["id"], member["id"])
+
+    response = client.get(f"/members/{member['id']}/loans")
+    assert response.status_code == 200
+    loans = response.json()
+    assert [loan["id"] for loan in loans] == [loan2["id"], loan1["id"]]
+
+
+def test_member_loans_filter_by_status(client: TestClient, library: Library) -> None:
+    member = library.member()
+    book1 = library.book()
+    book2 = library.book()
+    book3 = library.book()
+
+    loan1 = library.checkout(book1["id"], member["id"])
+    loan2 = library.checkout(book2["id"], member["id"])
+    loan3 = library.checkout(book3["id"], member["id"])
+
+    library.give_back(loan2["id"])
+
+    # ?status=open returns only unreturned loans
+    response_open = client.get(f"/members/{member['id']}/loans?status=open")
+    assert response_open.status_code == 200
+    open_loans = response_open.json()
+    assert [item["id"] for item in open_loans] == [loan3["id"], loan1["id"]]
+    assert all(item["returned_at"] is None for item in open_loans)
+
+    # ?status=returned returns only returned loans
+    response_returned = client.get(f"/members/{member['id']}/loans?status=returned")
+    assert response_returned.status_code == 200
+    returned_loans = response_returned.json()
+    assert [item["id"] for item in returned_loans] == [loan2["id"]]
+    assert all(item["returned_at"] is not None for item in returned_loans)
+
+    # No parameter returns all loans
+    response_all = client.get(f"/members/{member['id']}/loans")
+    assert response_all.status_code == 200
+    assert [item["id"] for item in response_all.json()] == [loan3["id"], loan2["id"], loan1["id"]]
+
+
+@pytest.mark.parametrize("status_val", ["closed", "all", "active", ""])
+def test_member_loans_invalid_status_is_422(
+    client: TestClient, library: Library, status_val: str
+) -> None:
+    member = library.member()
+    response = client.get(f"/members/{member['id']}/loans", params={"status": status_val})
+    assert response.status_code == 422
+
+
+def test_member_loans_unknown_member_is_404(client: TestClient) -> None:
+    assert client.get("/members/999/loans").status_code == 404
+    assert client.get("/members/999/loans?status=open").status_code == 404
+    assert client.get("/members/999/loans?status=returned").status_code == 404
+
+
+def test_member_loans_no_admin_key_needed(client: TestClient, library: Library) -> None:
+    member = library.member()
+    response = client.get(f"/members/{member['id']}/loans")
+    assert response.status_code == 200
+
+
+def test_readme_lists_member_loans_endpoint() -> None:
+    readme_path = Path(__file__).parents[1] / "README.md"
+    if not readme_path.exists():
+        readme_path = Path(__file__).parents[2] / "README.md"
+    if readme_path.exists():
+        assert "/members/{id}/loans" in readme_path.read_text()
