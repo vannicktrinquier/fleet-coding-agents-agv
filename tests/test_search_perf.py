@@ -57,5 +57,11 @@ def test_search_is_fast(
         statements.clear()
         response = client.get("/books/search", params={"q": term, "limit": 50})
         assert response.status_code == 200
-        assert response.json()
+        data = response.json()
+        assert data
+        assert len(data) <= 50
+
         assert len(statements) == 1
+        sql = statements[0].upper()
+        assert "WHERE" in sql
+        assert "LIMIT" in sql
