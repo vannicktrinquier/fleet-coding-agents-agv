@@ -82,17 +82,17 @@ def list_books(conn: sqlite3.Connection, page: int = 1, size: int = DEFAULT_PAGE
 def search_books(conn: sqlite3.Connection, query: str, limit: int = 20) -> list[Book]:
     """Find books whose title or author contains ``query``.
 
-    ``instr`` is used rather than ``LIKE`` so that ``%`` and ``_`` in the
-    query are matched literally.
+    ``instr`` with ``lower`` is used rather than ``LIKE`` so that ``%`` and ``_``
+    in the query are matched literally and comparisons are case-insensitive.
     """
-    term = query.strip()
+    term = query.strip().lower()
     if not term:
         return []
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM books
         WHERE deleted_at IS NULL
-          AND (instr(title, ?) > 0 OR instr(author, ?) > 0)
+          AND (instr(lower(title), ?) > 0 OR instr(lower(author), ?) > 0)
         ORDER BY title, id
         LIMIT ?
         """,

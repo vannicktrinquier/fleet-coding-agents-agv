@@ -137,6 +137,20 @@ def test_search_matches_title_or_author(client: TestClient, library: Library) ->
     assert [book["title"] for book in by_author] == ["Emma", "Persuasion"]
 
 
+def test_search_is_case_insensitive(client: TestClient, library: Library) -> None:
+    dune = library.book(title="Dune", author="Frank Herbert")
+
+    by_title_lower = client.get("/books/search", params={"q": "dune"}).json()
+    by_title_mixed = client.get("/books/search", params={"q": "DuNe"}).json()
+    by_author_lower = client.get("/books/search", params={"q": "herbert"}).json()
+    by_author_upper = client.get("/books/search", params={"q": "HERBERT"}).json()
+
+    assert [book["id"] for book in by_title_lower] == [dune["id"]]
+    assert [book["id"] for book in by_title_mixed] == [dune["id"]]
+    assert [book["id"] for book in by_author_lower] == [dune["id"]]
+    assert [book["id"] for book in by_author_upper] == [dune["id"]]
+
+
 def test_search_treats_wildcards_literally(client: TestClient, library: Library) -> None:
     library.book(title="100% Cotton", author="Ann Weaver")
     library.book(title="1000 Nights", author="Ben Teller")
@@ -144,6 +158,9 @@ def test_search_treats_wildcards_literally(client: TestClient, library: Library)
     results = client.get("/books/search", params={"q": "100%"}).json()
 
     assert [book["title"] for book in results] == ["100% Cotton"]
+
+    results_lower = client.get("/books/search", params={"q": "100% cotton"}).json()
+    assert [book["title"] for book in results_lower] == ["100% Cotton"]
 
 
 def test_search_needs_a_query(client: TestClient) -> None:
