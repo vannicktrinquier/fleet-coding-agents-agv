@@ -27,6 +27,17 @@ def test_registered_email_cannot_be_reused(client: TestClient, library: Library)
     assert response.json() == {"detail": "ada@example.org is already registered"}
 
 
+def test_registered_email_cannot_be_reused_case_insensitively(
+    client: TestClient, library: Library
+) -> None:
+    library.member(email="jane.doe@example.org")
+
+    response = client.post("/members", json={"name": "Jane Doe", "email": "Jane.Doe@Example.org"})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Jane.Doe@Example.org is already registered"}
+
+
 @pytest.mark.parametrize(
     "email", ["not-an-email", "ada@localhost", "ada@@example.org", "ada lovelace@example.org"]
 )
@@ -74,12 +85,35 @@ def test_email_change_to_a_taken_address_is_rejected(client: TestClient, library
     assert response.status_code == 409
 
 
+def test_email_change_to_a_taken_address_case_insensitively_is_rejected(
+    client: TestClient, library: Library
+) -> None:
+    library.member(email="ada@example.org")
+    grace = library.member(email="grace@example.org")
+
+    response = client.patch(f"/members/{grace['id']}", json={"email": "Ada@Example.ORG"})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Ada@Example.ORG is already registered"}
+
+
 def test_member_can_resubmit_their_own_email(client: TestClient, library: Library) -> None:
     member = library.member(email="ada@example.org")
 
     response = client.patch(f"/members/{member['id']}", json={"email": "ada@example.org"})
 
     assert response.status_code == 200
+
+
+def test_member_can_resubmit_their_own_email_with_different_casing(
+    client: TestClient, library: Library
+) -> None:
+    member = library.member(email="ada@example.org")
+
+    response = client.patch(f"/members/{member['id']}", json={"email": "Ada@Example.ORG"})
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "Ada@Example.ORG"
 
 
 def test_deactivate_member(client: TestClient, admin: dict[str, str], library: Library) -> None:

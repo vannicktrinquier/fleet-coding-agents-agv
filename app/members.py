@@ -20,7 +20,8 @@ _LOAN_COLUMNS = "id, book_id, member_id, loaned_at, due_on, returned_at, renewal
 
 def _email_taken(conn: sqlite3.Connection, email: str, exclude_id: int | None = None) -> bool:
     row = conn.execute(
-        """SELECT id FROM members WHERE email = ? AND id IS NOT ?""", (email, exclude_id)
+        """SELECT id FROM members WHERE email = ? COLLATE NOCASE AND id IS NOT ?""",
+        (email, exclude_id),
     ).fetchone()
     return row is not None
 
