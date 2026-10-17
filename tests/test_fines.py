@@ -18,10 +18,20 @@ DUE = date(2026, 3, 16)
         (date(2026, 3, 10), 0),
         (date(2026, 3, 16), 0),
         (date(2026, 3, 17), 0),
+        (date(2026, 3, 19), 0),
+        (date(2026, 3, 20), 100),
         (date(2026, 3, 26), 250),
         (date(2026, 6, 1), 1000),
     ],
-    ids=["early", "on-due-date", "one-day-late", "ten-days-late", "capped"],
+    ids=[
+        "early",
+        "on-due-date",
+        "one-day-late",
+        "last-day-of-grace-period",
+        "four-days-late",
+        "ten-days-late",
+        "capped",
+    ],
 )
 def test_compute_fine(on: date, expected: int) -> None:
     assert compute_fine(DUE, on, POLICY) == expected

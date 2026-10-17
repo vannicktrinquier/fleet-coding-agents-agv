@@ -91,6 +91,17 @@ def test_return_on_time_puts_the_copy_back(
     assert client.get(f"/books/{book['id']}").json()["copies_available"] == 1
 
 
+def test_return_on_last_day_of_grace_period_is_not_fined(
+    clock: FixedClock, library: Library
+) -> None:
+    loan = library.checkout(library.book()["id"], library.member()["id"])
+    clock.advance(days=14 + 3)
+
+    returned = library.give_back(loan["id"])
+
+    assert returned["fine_cents"] == 0
+
+
 def test_late_return_is_fined(clock: FixedClock, library: Library) -> None:
     loan = library.checkout(library.book()["id"], library.member()["id"])
     clock.advance(days=14 + 10)
