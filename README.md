@@ -27,6 +27,7 @@ The database file is created and migrated on startup.
 | `LIBRARY_ADMIN_KEY` | unset | Key that admin endpoints expect in the `X-API-Key` header |
 | `LIBRARY_LOAN_DAYS` | `14` | Loan period, also used for renewals |
 | `LIBRARY_MAX_ACTIVE_LOANS` | `5` | Books a member may have out at once |
+| `LIBRARY_MAX_RENEWALS` | `2` | Maximum renewals allowed per loan |
 | `LIBRARY_FINE_GRACE_DAYS` | `3` | Days late before a fine applies |
 | `LIBRARY_FINE_DAILY_CENTS` | `25` | Fine per day late |
 | `LIBRARY_FINE_CAP_CENTS` | `1000` | Maximum fine per loan |
@@ -82,6 +83,7 @@ for invalid input. Money is in cents. Dates and times are UTC.
 - **Returns.** A loan is returned once. The copy goes back on the shelf and the fine,
   if any, is recorded on the loan.
 - **Renewals.** Renewing sets the due date to 14 days after the renewal date.
+  A loan can be renewed at most twice (configurable with `LIBRARY_MAX_RENEWALS`).
   Overdue loans cannot be renewed: the book has to be returned and the fine paid.
 - **Fines.** A book returned up to 3 days after its due date is not fined. After
   that, the fine is 25 cents for every day since the due date, capped at $10.00 per

@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.clock import FixedClock
 from app.config import Settings
+from app.main import create_app
 from tests.support import Library
 
 
@@ -153,6 +156,72 @@ def test_returned_loan_cannot_be_renewed(client: TestClient, library: Library) -
     response = client.post(f"/loans/{loan['id']}/renew")
 
     assert response.status_code == 409
+
+
+def test_first_and_second_renewals_succeed(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    loan = library.checkout(library.book()["id"], library.member()["id"])
+
+    clock.advance(days=5)
+    r1 = client.post(f"/loans/{loan['id']}/renew")
+    assert r1.status_code == 200
+    assert r1.json()["renewals"] == 1
+    assert r1.json()["due_on"] == "2026-03-21"
+
+    clock.advance(days=5)
+    r2 = client.post(f"/loans/{loan['id']}/renew")
+    assert r2.status_code == 200
+    assert r2.json()["renewals"] == 2
+    assert r2.json()["due_on"] == "2026-03-26"
+
+
+def test_third_renewal_is_rejected_with_409_when_limit_reached(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    loan = library.checkout(library.book()["id"], library.member()["id"])
+
+    clock.advance(days=1)
+    client.post(f"/loans/{loan['id']}/renew")
+    clock.advance(days=1)
+    client.post(f"/loans/{loan['id']}/renew")
+
+    clock.advance(days=1)
+    r3 = client.post(f"/loans/{loan['id']}/renew")
+    assert r3.status_code == 409
+    assert "renewal limit" in r3.json()["detail"].lower()
+
+
+def test_renewal_limit_is_configurable_with_library_max_renewals(
+    tmp_path: Path, clock: FixedClock, admin: dict[str, str]
+) -> None:
+    custom_settings = Settings.from_env(
+        {"LIBRARY_MAX_RENEWALS": "1", "LIBRARY_ADMIN_KEY": admin["X-API-Key"]}
+    )
+    assert custom_settings.max_renewals == 1
+
+    app = create_app(db_path=tmp_path / "custom.db", clock=clock, settings=custom_settings)
+    with TestClient(app) as custom_client:
+        lib = Library(custom_client, admin)
+        loan = lib.checkout(lib.book()["id"], lib.member()["id"])
+
+        r1 = custom_client.post(f"/loans/{loan['id']}/renew")
+        assert r1.status_code == 200
+        assert r1.json()["renewals"] == 1
+
+        r2 = custom_client.post(f"/loans/{loan['id']}/renew")
+        assert r2.status_code == 409
+        assert "renewal limit" in r2.json()["detail"].lower()
+
+
+def test_readme_documents_renewal_limit_and_configuration() -> None:
+    readme_path = Path(__file__).parents[1] / "README.md"
+    if not readme_path.exists():
+        readme_path = Path(__file__).parents[2] / "README.md"
+    if readme_path.exists():
+        content = readme_path.read_text()
+        assert "LIBRARY_MAX_RENEWALS" in content
+        assert "renewed at most twice" in content or "renewal limit" in content
 
 
 def test_get_loan(client: TestClient, library: Library) -> None:

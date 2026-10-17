@@ -105,6 +105,8 @@ def renew_loan(conn: sqlite3.Connection, loan_id: int, clock: Clock, settings: S
     loan = get_loan(conn, loan_id)
     if loan.returned_at is not None:
         raise Conflict(f"loan {loan_id} has already been returned")
+    if loan.renewals >= settings.max_renewals:
+        raise Conflict(f"loan {loan_id} has reached the renewal limit")
     due_on = clock.today() + timedelta(days=settings.loan_days)
     with conn:
         conn.execute(
