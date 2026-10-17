@@ -111,6 +111,28 @@ def test_late_return_is_fined(clock: FixedClock, library: Library) -> None:
     assert returned["fine_cents"] == 250
 
 
+def test_returned_loan_cannot_be_returned_again(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    book = library.book(copies=1)
+    member = library.member()
+    loan = library.checkout(book["id"], member["id"])
+
+    first_return = library.give_back(loan["id"])
+    assert first_return["returned_at"] == "2026-03-02T10:00:00Z"
+
+    clock.advance(days=30)
+    second_return = client.post(f"/loans/{loan['id']}/return")
+
+    assert second_return.status_code == 409
+    assert second_return.json() == {"detail": f"loan {loan['id']} has already been returned"}
+    assert client.get(f"/books/{book['id']}").json()["copies_available"] == 1
+
+    persisted = client.get(f"/loans/{loan['id']}").json()
+    assert persisted["returned_at"] == first_return["returned_at"]
+    assert persisted["fine_cents"] == first_return["fine_cents"]
+
+
 def test_renewal_moves_the_due_date(
     client: TestClient, clock: FixedClock, library: Library
 ) -> None:
