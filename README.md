@@ -50,6 +50,7 @@ served at `/docs`.
 | GET | `/members/{id}` | | One member |
 | PATCH | `/members/{id}` | | Change `name` or `email` |
 | POST | `/members/{id}/deactivate` | admin | Stop a member from borrowing |
+| GET | `/members/{id}/loans` | | A member's loans, newest first |
 | GET | `/members/{id}/fines` | | Unpaid fines, settled and still accruing |
 | POST | `/members/{id}/fines/pay` | admin | Mark the settled fines as paid |
 | POST | `/loans` | | Check out a book: `book_id`, `member_id` |
