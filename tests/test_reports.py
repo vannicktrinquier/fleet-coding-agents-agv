@@ -16,6 +16,25 @@ def test_summary_report(client: TestClient, admin: dict[str, str], library: Libr
     assert set(body["loans"]) == {"open", "overdue", "returned_last_30_days"}
 
 
+def test_summary_report_excludes_deleted_books(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    library.book(copies=1)
+    b2 = library.book(copies=1)
+    library.book(copies=1)
+
+    del_res = client.delete(f"/books/{b2['id']}", headers=admin)
+    assert del_res.status_code == 204
+
+    response = client.get("/reports/summary", headers=admin)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["books"]["titles"] == 2
+    assert body["books"]["copies"] == 2
+    assert body["books"]["available"] == 2
+    assert body["books"]["on_loan"] == 0
+
+
 def test_popular_report(client: TestClient, admin: dict[str, str], library: Library) -> None:
     book = library.book()
     library.checkout(book["id"], library.member()["id"])

@@ -23,6 +23,7 @@ def book_stats(conn: sqlite3.Connection) -> BookStats:
                COALESCE(SUM(copies_total), 0) AS copies,
                COALESCE(SUM(copies_available), 0) AS available
         FROM books
+        WHERE deleted_at IS NULL
         """
     ).fetchone()
     return BookStats(
