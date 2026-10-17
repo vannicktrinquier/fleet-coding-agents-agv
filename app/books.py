@@ -71,7 +71,7 @@ def list_books(conn: sqlite3.Connection, page: int = 1, size: int = DEFAULT_PAGE
         (size + 1, offset),
     ).fetchall()
     return BookPage(
-        items=[Book.model_validate(row) for row in rows],
+        items=[Book.model_validate(row) for row in rows[:size]],
         page=page,
         size=size,
         total=total,

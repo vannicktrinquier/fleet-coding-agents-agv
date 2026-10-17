@@ -98,6 +98,28 @@ def test_list_books(client: TestClient, library: Library) -> None:
     assert page["has_next"] is False
 
 
+def test_list_books_paging_does_not_duplicate_items(client: TestClient, library: Library) -> None:
+    books = [library.book(title=f"Book {i}") for i in range(1, 6)]
+
+    p1 = client.get("/books", params={"page": 1, "size": 2}).json()
+    assert len(p1["items"]) == 2
+    assert [b["id"] for b in p1["items"]] == [books[0]["id"], books[1]["id"]]
+    assert p1["has_next"] is True
+    assert p1["total"] == 5
+
+    p2 = client.get("/books", params={"page": 2, "size": 2}).json()
+    assert len(p2["items"]) == 2
+    assert [b["id"] for b in p2["items"]] == [books[2]["id"], books[3]["id"]]
+    assert p2["has_next"] is True
+    assert p2["total"] == 5
+
+    p3 = client.get("/books", params={"page": 3, "size": 2}).json()
+    assert len(p3["items"]) == 1
+    assert [b["id"] for b in p3["items"]] == [books[4]["id"]]
+    assert p3["has_next"] is False
+    assert p3["total"] == 5
+
+
 @pytest.mark.parametrize("params", [{"page": 0}, {"size": 0}, {"size": 101}])
 def test_list_books_rejects_bad_paging(client: TestClient, params: dict[str, int]) -> None:
     assert client.get("/books", params=params).status_code == 422
