@@ -57,7 +57,8 @@ served at `/docs`.
 | POST | `/loans/{id}/return` | | Check a book back in |
 | POST | `/loans/{id}/renew` | | Renew a loan |
 | GET | `/loans/overdue` | admin | Open loans past their due date |
-| GET | `/reports/summary` | admin | Catalog, member, loan and fine totals |
+| GET | `/reports/summary` | admin | Catalog, member, loan and fine totals: `books`, `members`, `loans`, `outstanding_fines_cents` |
+| GET | `/reports/popular?days=30&limit=10` | admin | Most borrowed books: `book_id`, `title`, `author`, `loans` |
 
 Errors are JSON objects with a `detail` field: `401` for a missing or wrong admin
 key, `404` for unknown ids, `409` when a library rule forbids the request and `422`
@@ -85,8 +86,16 @@ for invalid input. Money is in cents. Dates and times are UTC.
   that, the fine is 25 cents for every day since the due date, capped at $10.00 per
   loan. Fines on books that are still out keep growing and count toward the
   borrowing limit above.
-- **Reports.** The summary only counts books that are in the catalog (deleted books
-  are excluded). Outstanding fines cover returned loans only.
+- **Reports.** Both reports require the admin key.
+  `GET /reports/summary` returns a generation timestamp (`generated_at`), catalog
+  totals (`books`: `titles`, `copies`, `available`, `on_loan`), member counts
+  (`members`: `total`, `active`), loan activity (`loans`: `open`, `overdue`,
+  `returned_last_30_days`), and `outstanding_fines_cents` (unpaid fines on returned
+  loans only; fines still accruing are excluded). Deleted books are excluded from
+  the summary counts.
+  `GET /reports/popular` returns the most borrowed books over the last `days` days
+  (default 30, 1 to 365), up to `limit` books (default 10, 1 to 50), with
+  `book_id`, `title`, `author` and `loans`. Deleted books are excluded.
 
 ## Development
 
