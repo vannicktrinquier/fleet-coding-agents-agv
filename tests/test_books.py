@@ -216,3 +216,19 @@ def test_book_on_loan_cannot_be_deleted(
 
     assert response.status_code == 409
     assert client.get(f"/books/{book['id']}").status_code == 200
+
+
+def test_list_books_exact_page_multiple(client: TestClient, library: Library) -> None:
+    books = [library.book(title=f"Book {i}") for i in range(1, 5)]
+
+    p1 = client.get("/books", params={"page": 1, "size": 2}).json()
+    assert len(p1["items"]) == 2
+    assert [b["id"] for b in p1["items"]] == [books[0]["id"], books[1]["id"]]
+    assert p1["has_next"] is True
+    assert p1["total"] == 4
+
+    p2 = client.get("/books", params={"page": 2, "size": 2}).json()
+    assert len(p2["items"]) == 2
+    assert [b["id"] for b in p2["items"]] == [books[2]["id"], books[3]["id"]]
+    assert p2["has_next"] is False
+    assert p2["total"] == 4
