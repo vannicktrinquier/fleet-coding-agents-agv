@@ -1,6 +1,7 @@
+import sqlite3
 from pathlib import Path
-from time import perf_counter
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import db
@@ -37,14 +38,24 @@ def seed_catalog(db_path: Path, clock: FixedClock, count: int) -> None:
         conn.close()
 
 
-def test_search_is_fast(client: TestClient, db_path: Path, clock: FixedClock) -> None:
+def test_search_is_fast(
+    client: TestClient, db_path: Path, clock: FixedClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
     seed_catalog(db_path, clock, CATALOG_SIZE)
 
-    started = perf_counter()
+    statements: list[str] = []
+    orig_connect = db.connect
+
+    def tracing_connect(path: Path | str) -> sqlite3.Connection:
+        conn = orig_connect(path)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(db, "connect", tracing_connect)
+
     for term in ("Herbert", "Le Guin", "Volume 1999", "Pratchett"):
+        statements.clear()
         response = client.get("/books/search", params={"q": term, "limit": 50})
         assert response.status_code == 200
         assert response.json()
-    elapsed = perf_counter() - started
-
-    assert elapsed < 0.25
+        assert len(statements) == 1
