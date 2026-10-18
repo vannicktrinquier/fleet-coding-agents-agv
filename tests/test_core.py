@@ -49,6 +49,7 @@ def test_settings_from_environment(tmp_path: Path) -> None:
             "LIBRARY_DB": str(tmp_path / "lib.db"),
             "LIBRARY_ADMIN_KEY": "  s3cret  ",
             "LIBRARY_LOAN_DAYS": "21",
+            "LIBRARY_MAX_RENEWALS": "3",
             "LIBRARY_FINE_CAP_CENTS": "500",
         }
     )
@@ -56,6 +57,7 @@ def test_settings_from_environment(tmp_path: Path) -> None:
     assert settings.db_path == tmp_path / "lib.db"
     assert settings.admin_api_key == "s3cret"
     assert settings.loan_days == 21
+    assert settings.max_renewals == 3
     assert settings.fines == FinePolicy(grace_days=3, daily_cents=25, cap_cents=500)
 
 

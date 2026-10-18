@@ -21,6 +21,7 @@ class Settings:
     admin_api_key: str = ""
     loan_days: int = 14
     max_active_loans: int = 5
+    max_renewals: int = 2
     fine_block_cents: int = 500
     fines: FinePolicy = field(default_factory=FinePolicy)
 
@@ -36,6 +37,11 @@ class Settings:
             loan_days=_env_int(env, "LIBRARY_LOAN_DAYS", defaults.loan_days, minimum=1),
             max_active_loans=_env_int(
                 env, "LIBRARY_MAX_ACTIVE_LOANS", defaults.max_active_loans, minimum=1
+            ),
+            max_renewals=_env_int(
+                env,
+                "LIBRARY_MAX_RENEWALS",
+                defaults.max_renewals,
             ),
             fine_block_cents=_env_int(env, "LIBRARY_FINE_BLOCK_CENTS", defaults.fine_block_cents),
             fines=FinePolicy(
