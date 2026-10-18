@@ -389,6 +389,8 @@ def test_paging_works_the_same_with_every_sort_order(
     assert [b["id"] for b in p3["items"]] == [books[4]["id"]]
     assert p3["has_next"] is False
     assert p3["total"] == 5
+
+
 def test_search_available_only_true_returns_only_matching_books_with_at_least_one_copy_available(
     client: TestClient, library: Library
 ) -> None:
@@ -465,3 +467,16 @@ def test_readme_documents_the_parameter() -> None:
             return
         current = current.parent
     raise FileNotFoundError("README.md not found")
+
+
+def test_search_books_default_limit(library: Library, db_path: Path) -> None:
+    # Create 21 books that match the query
+    for i in range(21):
+        library.book(title=f"Book {i} by TestAuthor", author="TestAuthor")
+
+    conn = db.connect(db_path)
+    try:
+        results = search_books(conn, "TestAuthor")
+        assert len(results) == 20
+    finally:
+        conn.close()
