@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -262,3 +263,39 @@ def test_returned_loans_are_not_overdue(
     library.give_back(loan["id"])
 
     assert client.get("/loans/overdue", headers=admin).json() == []
+
+
+def test_renewal_limit_of_zero_rejects_first_renewal(
+    tmp_path: Path, clock: FixedClock, admin: dict[str, str]
+) -> None:
+    custom_settings = Settings.from_env(
+        {"LIBRARY_MAX_RENEWALS": "0", "LIBRARY_ADMIN_KEY": admin["X-API-Key"]}
+    )
+    assert custom_settings.max_renewals == 0
+
+    app = create_app(db_path=tmp_path / "zero.db", clock=clock, settings=custom_settings)
+    with TestClient(app) as custom_client:
+        lib = Library(custom_client, admin)
+        loan = lib.checkout(lib.book()["id"], lib.member()["id"])
+
+        response = custom_client.post(f"/loans/{loan['id']}/renew")
+        assert response.status_code == 409
+        assert "renewal limit" in response.json()["detail"].lower()
+
+
+def test_renewal_rejected_when_renewals_exceed_limit(
+    client: TestClient, db_path: Path, library: Library, settings: Settings
+) -> None:
+    loan = library.checkout(library.book()["id"], library.member()["id"])
+
+    # Simulate a limit lowering: the loan already has more renewals than the current limit.
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE loans SET renewals = ? WHERE id = ?",
+            (settings.max_renewals + 1, loan["id"]),
+        )
+
+    response = client.post(f"/loans/{loan['id']}/renew")
+
+    assert response.status_code == 409
+    assert "renewal limit" in response.json()["detail"].lower()

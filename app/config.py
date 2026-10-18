@@ -38,7 +38,11 @@ class Settings:
             max_active_loans=_env_int(
                 env, "LIBRARY_MAX_ACTIVE_LOANS", defaults.max_active_loans, minimum=1
             ),
-            max_renewals=_env_int(env, "LIBRARY_MAX_RENEWALS", defaults.max_renewals, minimum=0),
+            max_renewals=_env_int(
+                env,
+                "LIBRARY_MAX_RENEWALS",
+                defaults.max_renewals,
+            ),
             fine_block_cents=_env_int(env, "LIBRARY_FINE_BLOCK_CENTS", defaults.fine_block_cents),
             fines=FinePolicy(
                 grace_days=_env_int(env, "LIBRARY_FINE_GRACE_DAYS", policy.grace_days),
