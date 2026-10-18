@@ -34,11 +34,23 @@ def book_stats(conn: sqlite3.Connection) -> BookStats:
     )
 
 
-def member_stats(conn: sqlite3.Connection) -> MemberStats:
+def member_stats(conn: sqlite3.Connection, now: datetime) -> MemberStats:
     row = conn.execute(
         """SELECT COUNT(*) AS total, COALESCE(SUM(active), 0) AS active FROM members"""
     ).fetchone()
-    return MemberStats(total=row["total"], active=row["active"])
+    with_overdue: int = conn.execute(
+        """
+        SELECT COUNT(DISTINCT member_id) AS with_overdue
+        FROM loans
+        WHERE returned_at IS NULL AND due_on < ?
+        """,
+        (now.date().isoformat(),),
+    ).fetchone()["with_overdue"]
+    return MemberStats(
+        total=row["total"],
+        active=row["active"],
+        with_overdue=with_overdue,
+    )
 
 
 def loan_stats(conn: sqlite3.Connection, now: datetime) -> LoanStats:
@@ -74,7 +86,7 @@ def summary(conn: sqlite3.Connection, now: datetime) -> SummaryReport:
     return SummaryReport(
         generated_at=now,
         books=book_stats(conn),
-        members=member_stats(conn),
+        members=member_stats(conn, now),
         loans=loan_stats(conn, now),
         outstanding_fines_cents=outstanding_fines(conn),
     )
