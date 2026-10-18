@@ -175,6 +175,24 @@ def test_borrowing_block_threshold_at_5_dollars(
     assert response.status_code == 409
     assert response.json() == {"detail": f"member {member_exact['id']} owes $5.00 in fines"}
 
+    # Test with a new member owing more than $5.00
+    member_over = library.member()
+    book5 = library.book()["id"]
+    book6 = library.book()["id"]
+
+    # 21 days late -> 21 * 25 = 525 cents (> $5.00)
+    loan_over = library.checkout(book5, member_over["id"])
+    clock.advance(days=14 + 21)
+    library.give_back(loan_over["id"])
+
+    fines_over = client.get(f"/members/{member_over['id']}/fines").json()
+    assert fines_over["total_cents"] == 525
+
+    # Cannot borrow when owing > $5.00 (525 cents)
+    response_over = client.post("/loans", json={"book_id": book6, "member_id": member_over["id"]})
+    assert response_over.status_code == 409
+    assert response_over.json() == {"detail": f"member {member_over['id']} owes $5.25 in fines"}
+
 
 def test_fines_accruing_on_books_still_out_count_toward_borrowing_block(
     client: TestClient, clock: FixedClock, library: Library
@@ -208,13 +226,16 @@ def test_paying_fines_lifts_the_borrowing_block(
     member = library.member()
     book1 = library.book()["id"]
     book2 = library.book()["id"]
+    book3 = library.book()["id"]
 
-    loan = library.checkout(book1, member["id"])
-    clock.advance(days=14 + 20)
-    library.give_back(loan["id"])
+    loan1 = library.checkout(book1, member["id"])
+    loan2 = library.checkout(book2, member["id"])
+    clock.advance(days=14 + 10)
+    library.give_back(loan1["id"])
+    library.give_back(loan2["id"])
 
-    # Blocked initially
-    blocked_resp = client.post("/loans", json={"book_id": book2, "member_id": member["id"]})
+    # Blocked initially (owes 500 cents from 2 loans)
+    blocked_resp = client.post("/loans", json={"book_id": book3, "member_id": member["id"]})
     assert blocked_resp.status_code == 409
 
     # Admin pays the fine
@@ -223,7 +244,7 @@ def test_paying_fines_lifts_the_borrowing_block(
     assert pay_resp.json()["paid_cents"] == 500
 
     # Borrowing is now permitted
-    borrow_resp = client.post("/loans", json={"book_id": book2, "member_id": member["id"]})
+    borrow_resp = client.post("/loans", json={"book_id": book3, "member_id": member["id"]})
     assert borrow_resp.status_code == 201
-    assert borrow_resp.json()["book_id"] == book2
+    assert borrow_resp.json()["book_id"] == book3
     assert borrow_resp.json()["member_id"] == member["id"]
