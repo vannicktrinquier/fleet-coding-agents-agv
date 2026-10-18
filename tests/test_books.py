@@ -180,6 +180,49 @@ def test_update_book(client: TestClient, admin: dict[str, str], library: Library
     assert response.json()["year"] == 1965
 
 
+def test_update_copies_adjusts_copies_available(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    book = library.book(copies=1)
+    response = client.patch(f"/books/{book['id']}", json={"copies": 2}, headers=admin)
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["copies_total"] == 2
+    assert updated["copies_available"] == 2
+
+    # Lowering copies when none on loan
+    response = client.patch(f"/books/{book['id']}", json={"copies": 1}, headers=admin)
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["copies_total"] == 1
+    assert updated["copies_available"] == 1
+
+
+def test_update_copies_with_active_loans(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    book = library.book(copies=3)
+    m1 = library.member()
+    m2 = library.member()
+    library.checkout(book["id"], m1["id"])
+    library.checkout(book["id"], m2["id"])
+
+    # 3 total, 2 on loan, 1 available
+    # Increase to 5 total -> 3 available (5 - 2)
+    response = client.patch(f"/books/{book['id']}", json={"copies": 5}, headers=admin)
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["copies_total"] == 5
+    assert updated["copies_available"] == 3
+
+    # Decrease to 2 total -> 0 available (2 - 2)
+    response = client.patch(f"/books/{book['id']}", json={"copies": 2}, headers=admin)
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["copies_total"] == 2
+    assert updated["copies_available"] == 0
+
+
 def test_update_rejects_null_title(
     client: TestClient, admin: dict[str, str], library: Library
 ) -> None:

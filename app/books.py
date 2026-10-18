@@ -126,6 +126,7 @@ def update_book(conn: sqlite3.Connection, book_id: int, changes: BookUpdate) -> 
         if copies < on_loan:
             raise Conflict(f"{on_loan} copies are on loan; the total cannot go below that")
         fields["copies_total"] = copies
+        fields["copies_available"] = copies - on_loan
     assignments = ", ".join(f"{name} = ?" for name in fields)
     with conn:
         conn.execute(
