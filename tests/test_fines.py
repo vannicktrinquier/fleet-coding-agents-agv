@@ -116,3 +116,114 @@ def test_unpaid_fines_block_new_loans(
 
     assert response.status_code == 409
     assert response.json() == {"detail": f"member {member['id']} owes $5.00 in fines"}
+
+
+def test_fine_cap_loan_returned_100_days_late_and_cap_applies_per_loan(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    """A loan returned 100 days late is fined exactly 1000 cents, and the cap applies per loan."""
+    member = library.member()
+    loan1 = library.checkout(library.book()["id"], member["id"])
+    loan2 = library.checkout(library.book()["id"], member["id"])
+
+    clock.advance(days=14 + 100)
+    returned1 = library.give_back(loan1["id"])
+    returned2 = library.give_back(loan2["id"])
+
+    assert returned1["fine_cents"] == 1000
+    assert returned2["fine_cents"] == 1000
+
+    fines = client.get(f"/members/{member['id']}/fines").json()
+    assert fines["total_cents"] == 2000
+
+
+def test_borrowing_block_threshold_at_5_dollars(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    """A member who owes less than $5.00 can still borrow; exactly $5.00 cannot."""
+    member = library.member()
+    book1 = library.book()["id"]
+    book2 = library.book()["id"]
+
+    # 19 days late -> 19 * 25 = 475 cents (< 500 cents / $5.00)
+    loan = library.checkout(book1, member["id"])
+    clock.advance(days=14 + 19)
+    library.give_back(loan["id"])
+
+    fines_under = client.get(f"/members/{member['id']}/fines").json()
+    assert fines_under["total_cents"] == 475
+
+    # Can still borrow with 475 cents owed
+    loan2 = library.checkout(book2, member["id"])
+    assert loan2["id"] is not None
+
+    # Test with a new member owing exactly 500 cents
+    member_exact = library.member()
+    book3 = library.book()["id"]
+    book4 = library.book()["id"]
+
+    # 20 days late -> 20 * 25 = 500 cents (exactly $5.00)
+    loan_exact = library.checkout(book3, member_exact["id"])
+    clock.advance(days=14 + 20)
+    library.give_back(loan_exact["id"])
+
+    fines_exact = client.get(f"/members/{member_exact['id']}/fines").json()
+    assert fines_exact["total_cents"] == 500
+
+    # Cannot borrow when owing exactly $5.00 (500 cents)
+    response = client.post("/loans", json={"book_id": book4, "member_id": member_exact["id"]})
+    assert response.status_code == 409
+    assert response.json() == {"detail": f"member {member_exact['id']} owes $5.00 in fines"}
+
+
+def test_fines_accruing_on_books_still_out_count_toward_borrowing_block(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    """Fines still growing on books that are out count toward the block."""
+    member = library.member()
+    book1 = library.book()["id"]
+    book2 = library.book()["id"]
+
+    # Member borrows book1, does not return it.
+    library.checkout(book1, member["id"])
+
+    # Advance 14 days loan + 20 days late -> 20 * 25 = 500 cents accruing
+    clock.advance(days=14 + 20)
+
+    fines = client.get(f"/members/{member['id']}/fines").json()
+    assert fines["total_cents"] == 500
+    assert len(fines["items"]) == 1
+    assert fines["items"][0]["accruing"] is True
+
+    # Attempt to borrow book2 while fine is accruing and at threshold
+    response = client.post("/loans", json={"book_id": book2, "member_id": member["id"]})
+    assert response.status_code == 409
+    assert response.json() == {"detail": f"member {member['id']} owes $5.00 in fines"}
+
+
+def test_paying_fines_lifts_the_borrowing_block(
+    client: TestClient, admin: dict[str, str], clock: FixedClock, library: Library
+) -> None:
+    """Paying the fines lifts the block."""
+    member = library.member()
+    book1 = library.book()["id"]
+    book2 = library.book()["id"]
+
+    loan = library.checkout(book1, member["id"])
+    clock.advance(days=14 + 20)
+    library.give_back(loan["id"])
+
+    # Blocked initially
+    blocked_resp = client.post("/loans", json={"book_id": book2, "member_id": member["id"]})
+    assert blocked_resp.status_code == 409
+
+    # Admin pays the fine
+    pay_resp = client.post(f"/members/{member['id']}/fines/pay", headers=admin)
+    assert pay_resp.status_code == 200
+    assert pay_resp.json()["paid_cents"] == 500
+
+    # Borrowing is now permitted
+    borrow_resp = client.post("/loans", json={"book_id": book2, "member_id": member["id"]})
+    assert borrow_resp.status_code == 201
+    assert borrow_resp.json()["book_id"] == book2
+    assert borrow_resp.json()["member_id"] == member["id"]
