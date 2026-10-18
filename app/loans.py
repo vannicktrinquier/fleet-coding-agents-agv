@@ -9,12 +9,12 @@ from app import fines
 from app.auth import require_admin
 from app.books import get_book
 from app.clock import Clock
-from app.config import Settings
+from app.config import FinePolicy, Settings
 from app.db import timestamp
 from app.deps import ClockDep, ConnDep, SettingsDep
 from app.errors import Conflict, NotFound
 from app.members import get_member
-from app.models import CheckoutRequest, Loan
+from app.models import CheckoutRequest, Loan, OverdueLoan
 
 router = APIRouter(prefix="/loans", tags=["loans"])
 
@@ -118,7 +118,7 @@ def renew_loan(conn: sqlite3.Connection, loan_id: int, clock: Clock, settings: S
     return get_loan(conn, loan_id)
 
 
-def list_overdue(conn: sqlite3.Connection, today: date) -> list[Loan]:
+def list_overdue(conn: sqlite3.Connection, today: date, policy: FinePolicy) -> list[OverdueLoan]:
     """Open loans whose due date has passed, most overdue first."""
     rows = conn.execute(
         f"""
@@ -128,7 +128,17 @@ def list_overdue(conn: sqlite3.Connection, today: date) -> list[Loan]:
         """,
         (today.isoformat(),),
     ).fetchall()
-    return [Loan.model_validate(row) for row in rows]
+    items: list[OverdueLoan] = []
+    for row in rows:
+        loan = Loan.model_validate(row)
+        items.append(
+            OverdueLoan(
+                **loan.model_dump(),
+                days_overdue=fines.days_late(loan.due_on, today),
+                accrued_fine_cents=fines.compute_fine(loan.due_on, today, policy),
+            )
+        )
+    return items
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -137,8 +147,8 @@ def borrow(body: CheckoutRequest, conn: ConnDep, clock: ClockDep, settings: Sett
 
 
 @router.get("/overdue", dependencies=[Depends(require_admin)])
-def overdue(conn: ConnDep, clock: ClockDep) -> list[Loan]:
-    return list_overdue(conn, clock.today())
+def overdue(conn: ConnDep, clock: ClockDep, settings: SettingsDep) -> list[OverdueLoan]:
+    return list_overdue(conn, clock.today(), settings.fines)
 
 
 @router.get("/{loan_id}")

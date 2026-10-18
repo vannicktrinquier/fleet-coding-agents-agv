@@ -296,7 +296,113 @@ def test_overdue_lists_open_loans_past_their_due_date(
     response = client.get("/loans/overdue", headers=admin)
 
     assert response.status_code == 200
-    assert [loan["id"] for loan in response.json()] == [late["id"]]
+    items = response.json()
+    assert [loan["id"] for loan in items] == [late["id"]]
+    assert items[0]["days_overdue"] == 1
+    assert items[0]["accrued_fine_cents"] == 0
+
+
+def test_overdue_list_each_item_has_days_overdue_and_accrued_fine_cents(
+    client: TestClient, admin: dict[str, str], clock: FixedClock, library: Library
+) -> None:
+    # Acceptance criterion 1:
+    # Each item also has `days_overdue` (days since the due date, as of today) and
+    # `accrued_fine_cents` (fine loan would get if returned today, using normal rules).
+    member = library.member()
+    b1 = library.book()
+    b2 = library.book()
+    library.checkout(b1["id"], member["id"])
+    library.checkout(b2["id"], member["id"])
+
+    # Loans are due in 14 days. Advance 16 days (2 days overdue: in grace period, fine 0).
+    clock.advance(days=16)
+    res1 = client.get("/loans/overdue", headers=admin)
+    assert res1.status_code == 200
+    items1 = res1.json()
+    assert len(items1) == 2
+    for item in items1:
+        assert item["days_overdue"] == 2
+        assert item["accrued_fine_cents"] == 0
+
+    # Advance another 6 days (total 22 days since checkout, 8 days overdue).
+    # Normal fine rules: 8 > grace_days (3) => 8 * 25 = 200 cents.
+    clock.advance(days=6)
+    res2 = client.get("/loans/overdue", headers=admin)
+    assert res2.status_code == 200
+    items2 = res2.json()
+    assert len(items2) == 2
+    for item in items2:
+        assert item["days_overdue"] == 8
+        assert item["accrued_fine_cents"] == 200
+
+
+def test_overdue_list_existing_fields_unchanged_and_order_stays_most_overdue_first(
+    client: TestClient, admin: dict[str, str], clock: FixedClock, library: Library
+) -> None:
+    # Acceptance criterion 2:
+    # Existing fields are unchanged, and the order stays "most overdue first".
+    member = library.member()
+    b1 = library.book()
+    b2 = library.book()
+    loan1 = library.checkout(b1["id"], member["id"])
+
+    clock.advance(days=5)
+    loan2 = library.checkout(b2["id"], member["id"])
+
+    # Advance 11 days (loan1 is 2 days overdue; loan2 is not overdue)
+    clock.advance(days=11)
+    # Advance 5 more days (loan1 is 7 days overdue; loan2 is 2 days overdue)
+    clock.advance(days=5)
+
+    response = client.get("/loans/overdue", headers=admin)
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 2
+
+    # Order must be most overdue first: loan1 (7 days overdue) then loan2 (2 days overdue)
+    assert items[0]["id"] == loan1["id"]
+    assert items[1]["id"] == loan2["id"]
+
+    # Verify all existing fields match loan1
+    expected_keys = {
+        "id",
+        "book_id",
+        "member_id",
+        "loaned_at",
+        "due_on",
+        "returned_at",
+        "renewals",
+        "fine_cents",
+        "days_overdue",
+        "accrued_fine_cents",
+    }
+    assert set(items[0].keys()) == expected_keys
+    assert items[0]["book_id"] == loan1["book_id"]
+    assert items[0]["member_id"] == loan1["member_id"]
+    assert items[0]["loaned_at"] == loan1["loaned_at"]
+    assert items[0]["due_on"] == loan1["due_on"]
+    assert items[0]["returned_at"] is None
+    assert items[0]["renewals"] == loan1["renewals"]
+    assert items[0]["fine_cents"] == 0  # not yet returned, fine_cents column in DB is 0
+    assert items[0]["days_overdue"] == 7
+    assert items[0]["accrued_fine_cents"] == 175  # 7 * 25 cents
+
+    assert items[1]["id"] == loan2["id"]
+    assert items[1]["days_overdue"] == 2
+    assert items[1]["accrued_fine_cents"] == 0
+
+
+def test_readme_describes_overdue_new_fields() -> None:
+    # Acceptance criterion 3:
+    # The README describes the new fields.
+    readme_path = Path(__file__).parents[1] / "README.md"
+    if not readme_path.exists():
+        readme_path = Path(__file__).parents[2] / "README.md"
+    if readme_path.exists():
+        content = readme_path.read_text()
+        assert "/loans/overdue" in content
+        assert "days_overdue" in content
+        assert "accrued_fine_cents" in content
 
 
 def test_returned_loans_are_not_overdue(

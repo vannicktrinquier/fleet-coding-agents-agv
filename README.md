@@ -58,7 +58,7 @@ served at `/docs`.
 | GET | `/loans/{id}` | | One loan |
 | POST | `/loans/{id}/return` | | Check a book back in |
 | POST | `/loans/{id}/renew` | | Renew a loan |
-| GET | `/loans/overdue` | admin | Open loans past their due date |
+| GET | `/loans/overdue` | admin | Open loans past their due date: includes `days_overdue` and `accrued_fine_cents` |
 | GET | `/reports/summary` | admin | Catalog, member, loan and fine totals: `books`, `members`, `loans`, `outstanding_fines_cents` |
 | GET | `/reports/popular?days=30&limit=10` | admin | Most borrowed books: `book_id`, `title`, `author`, `loans` |
 
@@ -80,6 +80,9 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
   members keep their history but cannot borrow.
 - **Loans.** A loan lasts 14 days. A member may have up to 5 books out, at most one
   copy of each, and cannot borrow while they owe $5.00 or more in fines.
+  `GET /loans/overdue` lists open loans past their due date, ordered most overdue
+  first, with loan fields plus `days_overdue` and `accrued_fine_cents` (the fine
+  the loan would incur if returned today).
 - **Returns.** A loan is returned once. The copy goes back on the shelf and the fine,
   if any, is recorded on the loan.
 - **Renewals.** Renewing sets the due date to 14 days after the renewal date.
