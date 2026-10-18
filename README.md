@@ -60,7 +60,7 @@ served at `/docs`.
 | POST | `/loans/{id}/renew` | | Renew a loan |
 | GET | `/loans/overdue` | admin | Open loans past their due date: includes `days_overdue` and `accrued_fine_cents` |
 | GET | `/reports/summary` | admin | Catalog, member, loan and fine totals: `books`, `members`, `loans`, `outstanding_fines_cents` |
-| GET | `/reports/popular?days=30&limit=10` | admin | Most borrowed books: `book_id`, `title`, `author`, `loans` |
+| GET | `/reports/popular?days=30&limit=10&min_loans=1` | admin | Most borrowed books: `book_id`, `title`, `author`, `loans` |
 
 Errors are JSON objects with a `detail` field: `401` for a missing, wrong or
 unconfigured admin key, `404` for unknown ids, `409` when a library rule forbids
@@ -106,8 +106,9 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
   loans only; fines still accruing are excluded). Deleted books are excluded from
   the summary counts.
   `GET /reports/popular` returns the most borrowed books over the last `days` days
-  (default 30, 1 to 365), up to `limit` books (default 10, 1 to 50), with
-  `book_id`, `title`, `author` and `loans`. Deleted books are excluded.
+  (default 30, 1 to 365), up to `limit` books (default 10, 1 to 50), borrowed at
+  least `min_loans` times (default 1, at least 1), with `book_id`, `title`,
+  `author` and `loans`. Deleted books are excluded.
 
 ## Development
 
