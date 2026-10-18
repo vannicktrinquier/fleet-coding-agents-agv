@@ -1,6 +1,7 @@
 """Request and response models."""
 
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
@@ -56,6 +57,12 @@ class BookUpdate(_Input):
         if value is None:
             raise ValueError("may not be null")
         return value
+
+
+class BookSort(StrEnum):
+    TITLE = "title"
+    AUTHOR = "author"
+    YEAR = "year"
 
 
 class Book(BaseModel):

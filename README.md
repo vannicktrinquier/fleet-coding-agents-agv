@@ -41,7 +41,7 @@ served at `/docs`.
 | Method | Path | Admin | Description |
 | :--- | :--- | :---: | :--- |
 | GET | `/health` | | Liveness and schema version |
-| GET | `/books?page=1&size=20` | | The catalog, oldest entries first |
+| GET | `/books?page=1&size=20&sort=...` | | The catalog, optionally sorted by `title`, `author`, or `year` |
 | GET | `/books/search?q=...&limit=20` | | Search titles and authors |
 | GET | `/books/{id}` | | One book |
 | POST | `/books` | admin | Add a book: `isbn`, `title`, `author`, `year`, `copies` |
@@ -74,6 +74,9 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
   disappear from listings, search and reports, and their ISBN can be added again.
 - **Listing.** `GET /books` returns pages of `size` books (default 20, at most 100)
   with `total` and `has_next`. Walking the pages from 1 visits every book once.
+  The optional `sort` parameter orders by `title`, `author` (then title), or `year`
+  (books without a year last, then title). Without `sort`, entries are ordered oldest
+  first. Ties are broken by `id`. Any other `sort` value is a 422.
 - **Search.** Case-insensitive substring match on the title or the author, ordered
   by title. `%` and `_` in the query are matched literally.
 - **Members.** Email addresses are unique, compared case-insensitively. Deactivated
