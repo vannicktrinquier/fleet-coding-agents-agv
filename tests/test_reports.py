@@ -166,6 +166,36 @@ def test_popular_books_includes_only_books_with_loans_ge_min_loans(
         conn.close()
 
 
+def test_popular_books_defaults_days_30_and_limit_10(
+    library: Library, db_path: Path, clock: FixedClock
+) -> None:
+    member = library.member()
+    b_too_old = library.book(title="Book 00 Too Old")
+    l_old = library.checkout(b_too_old["id"], member["id"])
+    library.give_back(l_old["id"])
+
+    clock.advance(days=1)
+    b_at_boundary = library.book(title="Book 01 At Boundary")
+    l_boundary = library.checkout(b_at_boundary["id"], member["id"])
+    library.give_back(l_boundary["id"])
+
+    clock.advance(days=30)
+    for i in range(2, 12):
+        book = library.book(title=f"Book {i:02d}")
+        loan = library.checkout(book["id"], member["id"])
+        library.give_back(loan["id"])
+
+    conn = db.connect(db_path)
+    try:
+        results = popular_books(conn, clock.now())
+        assert len(results) == 10
+        returned_ids = [b.book_id for b in results]
+        assert b_too_old["id"] not in returned_ids
+        assert returned_ids[0] == b_at_boundary["id"]
+    finally:
+        conn.close()
+
+
 def test_get_reports_popular_min_loans_2_returns_only_books_borrowed_at_least_twice(
     client: TestClient, admin: dict[str, str], library: Library
 ) -> None:
