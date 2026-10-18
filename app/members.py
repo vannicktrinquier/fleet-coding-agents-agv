@@ -66,6 +66,15 @@ def update_member(conn: sqlite3.Connection, member_id: int, changes: MemberUpdat
 def deactivate_member(conn: sqlite3.Connection, member_id: int) -> Member:
     """Deactivated members keep their history but cannot borrow."""
     get_member(conn, member_id)
+    open_loans: int = conn.execute(
+        """SELECT COUNT(*) AS count FROM loans WHERE member_id = ? AND returned_at IS NULL""",
+        (member_id,),
+    ).fetchone()["count"]
+    if open_loans > 0:
+        s = "" if open_loans == 1 else "s"
+        raise Conflict(
+            f"member {member_id} has {open_loans} open loan{s} and cannot be deactivated"
+        )
     with conn:
         conn.execute("""UPDATE members SET active = 0 WHERE id = ?""", (member_id,))
     return get_member(conn, member_id)

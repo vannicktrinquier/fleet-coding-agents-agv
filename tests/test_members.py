@@ -125,6 +125,73 @@ def test_deactivate_member(client: TestClient, admin: dict[str, str], library: L
     assert response.json()["active"] is False
 
 
+def test_deactivate_member_returns_409_when_member_has_open_loans_with_count(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    member = library.member()
+    b1 = library.book()
+    b2 = library.book()
+    b3 = library.book()
+    library.checkout(b1["id"], member["id"])
+    library.checkout(b2["id"], member["id"])
+    library.checkout(b3["id"], member["id"])
+
+    response = client.post(f"/members/{member['id']}/deactivate", headers=admin)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": f"member {member['id']} has 3 open loans and cannot be deactivated"
+    }
+    assert "3" in response.json()["detail"]
+
+    # Verify active status did not change
+    assert client.get(f"/members/{member['id']}").json()["active"] is True
+
+
+def test_deactivate_member_without_open_loans_succeeds(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    member = library.member()
+    book = library.book()
+    loan = library.checkout(book["id"], member["id"])
+    library.give_back(loan["id"])
+
+    response = client.post(f"/members/{member['id']}/deactivate", headers=admin)
+
+    assert response.status_code == 200
+    assert response.json()["active"] is False
+
+
+def test_unpaid_fines_on_returned_loans_do_not_block_deactivation(
+    client: TestClient, admin: dict[str, str], library: Library, clock: FixedClock
+) -> None:
+    member = library.member()
+    book = library.book()
+    loan = library.checkout(book["id"], member["id"])
+
+    # Advance beyond grace period so a fine is incurred on return
+    clock.advance(days=20)
+    library.give_back(loan["id"])
+
+    # Check that member owes fines
+    fines_resp = client.get(f"/members/{member['id']}/fines")
+    assert fines_resp.json()["total_cents"] > 0
+
+    response = client.post(f"/members/{member['id']}/deactivate", headers=admin)
+
+    assert response.status_code == 200
+    assert response.json()["active"] is False
+
+
+def test_readme_library_rules_mention_deactivation_restrictions() -> None:
+    readme_path = Path(__file__).parents[1] / "README.md"
+    if not readme_path.exists():
+        readme_path = Path(__file__).parents[2] / "README.md"
+    content = readme_path.read_text()
+    assert "open loans" in content or "open loan" in content
+    assert "cannot be deactivated" in content or "deactivation" in content
+
+
 def test_deactivation_needs_the_admin_key(client: TestClient, library: Library) -> None:
     member = library.member()
 

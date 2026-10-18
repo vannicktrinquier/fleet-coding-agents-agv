@@ -80,7 +80,8 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
 - **Search.** Case-insensitive substring match on the title or the author, ordered
   by title. `%` and `_` in the query are matched literally.
 - **Members.** Email addresses are unique, compared case-insensitively. Deactivated
-  members keep their history but cannot borrow.
+  members keep their history but cannot borrow. A member with open loans cannot be
+  deactivated. Unpaid fines on returned loans do not block deactivation.
 - **Loans.** A loan lasts 14 days. A member may have up to 5 books out, at most one
   copy of each, and cannot borrow while they owe $5.00 or more in fines.
 - **Returns.** A loan is returned once. The copy goes back on the shelf and the fine,
