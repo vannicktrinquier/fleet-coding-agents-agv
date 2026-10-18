@@ -125,6 +125,11 @@ class Loan(BaseModel):
     fine_cents: int
 
 
+class OverdueLoan(Loan):
+    days_overdue: int
+    accrued_fine_cents: int
+
+
 class FineItem(BaseModel):
     loan_id: int
     book_id: int
