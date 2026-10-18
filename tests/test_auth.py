@@ -1,6 +1,7 @@
 import logging
 import warnings
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,12 +106,32 @@ def test_admin_endpoint_rejects_missing_header_when_configured_key_is_placeholde
         assert response.json() == {"detail": "missing or invalid API key"}
 
 
+@patch("app.main.warnings.warn")
 def test_startup_warns_when_admin_key_not_configured(
-    tmp_path: Path, clock: FixedClock, caplog: pytest.LogCaptureFixture
+    mock_warn, tmp_path: Path, clock: FixedClock, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING), pytest.warns(UserWarning, match="LIBRARY_ADMIN_KEY"):
+    msg = "LIBRARY_ADMIN_KEY is not set; admin endpoints are disabled"
+    with caplog.at_level(logging.WARNING):
         create_app(db_path=tmp_path / "test.db", clock=clock, settings=Settings())
-    assert any("LIBRARY_ADMIN_KEY" in record.message for record in caplog.records)
+
+    assert any(msg == record.message for record in caplog.records)
+    mock_warn.assert_any_call(msg, UserWarning, stacklevel=2)
+
+
+@patch("app.main.warnings.warn")
+def test_startup_warns_when_admin_key_is_whitespace(
+    mock_warn, tmp_path: Path, clock: FixedClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    msg = "LIBRARY_ADMIN_KEY is not set; admin endpoints are disabled"
+    with caplog.at_level(logging.WARNING):
+        create_app(
+            db_path=tmp_path / "test.db",
+            clock=clock,
+            settings=Settings(admin_api_key="   "),
+        )
+
+    assert any(msg == record.message for record in caplog.records)
+    mock_warn.assert_any_call(msg, UserWarning, stacklevel=2)
 
 
 def test_startup_does_not_warn_when_admin_key_configured(
@@ -125,3 +146,23 @@ def test_startup_does_not_warn_when_admin_key_configured(
         )
     assert not any("LIBRARY_ADMIN_KEY" in record.message for record in caplog.records)
     assert not any("LIBRARY_ADMIN_KEY" in str(w.message) for w in recorded)
+
+
+def test_admin_endpoint_accepts_configured_key_with_whitespace(
+    client: TestClient, admin: dict[str, str]
+) -> None:
+    key_with_spaces = {"X-API-Key": f"  {admin['X-API-Key']}  "}
+    assert client.get("/loans/overdue", headers=key_with_spaces).status_code == 200
+
+
+def test_admin_endpoint_accepts_when_configured_key_has_whitespace(
+    tmp_path: Path, clock: FixedClock
+) -> None:
+    app = create_app(
+        db_path=tmp_path / "test.db",
+        clock=clock,
+        settings=Settings(admin_api_key="  secret-key  "),
+    )
+    with TestClient(app) as test_client:
+        response = test_client.get("/loans/overdue", headers={"X-API-Key": "secret-key"})
+        assert response.status_code == 200
