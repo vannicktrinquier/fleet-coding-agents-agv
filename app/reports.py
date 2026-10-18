@@ -93,7 +93,11 @@ def summary(conn: sqlite3.Connection, now: datetime) -> SummaryReport:
 
 
 def popular_books(
-    conn: sqlite3.Connection, now: datetime, days: int = 30, limit: int = 10
+    conn: sqlite3.Connection,
+    now: datetime,
+    days: int = 30,
+    limit: int = 10,
+    min_loans: int = 1,
 ) -> list[PopularBook]:
     """Most borrowed books over the last ``days`` days."""
     since = now - timedelta(days=days)
@@ -103,10 +107,11 @@ def popular_books(
         FROM loans AS l JOIN books AS b ON b.id = l.book_id
         WHERE l.loaned_at >= ? AND b.deleted_at IS NULL
         GROUP BY b.id
+        HAVING COUNT(*) >= ?
         ORDER BY loans DESC, b.title, b.id
         LIMIT ?
         """,
-        (timestamp(since), limit),
+        (timestamp(since), min_loans, limit),
     ).fetchall()
     return [PopularBook.model_validate(row) for row in rows]
 
@@ -122,5 +127,6 @@ def get_popular(
     clock: ClockDep,
     days: Annotated[int, Query(ge=1, le=365)] = 30,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    min_loans: Annotated[int, Query(ge=1)] = 1,
 ) -> list[PopularBook]:
-    return popular_books(conn, clock.now(), days=days, limit=limit)
+    return popular_books(conn, clock.now(), days=days, limit=limit, min_loans=min_loans)
