@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import db
@@ -310,19 +311,41 @@ def test_returned_loans_are_not_overdue(
     assert client.get("/loans/overdue", headers=admin).json() == []
 
 
-def test_overdue_query_plan_uses_index(client: TestClient, db_path: Path) -> None:
+def test_overdue_query_plan_uses_index(
+    app: FastAPI, client: TestClient, db_path: Path, admin: dict[str, str]
+) -> None:
+    from app.deps import get_conn
+
+    queries = []
+
+    def custom_get_conn():
+        conn = db.connect(db_path)
+        conn.set_trace_callback(queries.append)
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    app.dependency_overrides[get_conn] = custom_get_conn
+
+    try:
+        response = client.get("/loans/overdue", headers=admin)
+        assert response.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+    # Find the overdue query
+    target_query = None
+    for q in queries:
+        if "FROM loans" in q and "returned_at IS NULL" in q:
+            target_query = q
+            break
+
+    assert target_query is not None, "Could not find the overdue query"
+
     conn = db.connect(db_path)
     try:
-        plan = conn.execute(
-            """
-            EXPLAIN QUERY PLAN
-            SELECT id, book_id, member_id, loaned_at, due_on, returned_at, renewals, fine_cents
-            FROM loans
-            WHERE returned_at IS NULL AND due_on < ?
-            ORDER BY due_on, id
-            """,
-            ("2026-03-02",),
-        ).fetchall()
+        plan = conn.execute("EXPLAIN QUERY PLAN " + target_query).fetchall()
         details = [row["detail"] for row in plan]
         assert not any("SCAN loans" in d for d in details)
         assert not any("USE TEMP B-TREE" in d for d in details)
