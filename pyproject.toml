@@ -5,7 +5,7 @@ description = "A small book-lending library service (FastAPI + SQLite)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.136,<0.137",
+    "fastapi>=0.143,<0.144",
     "pydantic>=2.11",
     "uvicorn>=0.34",
 ]
