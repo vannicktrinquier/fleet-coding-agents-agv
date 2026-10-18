@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app import db
 from app.clock import FixedClock
 from app.config import Settings
 from app.main import create_app
@@ -307,6 +308,27 @@ def test_returned_loans_are_not_overdue(
     library.give_back(loan["id"])
 
     assert client.get("/loans/overdue", headers=admin).json() == []
+
+
+def test_overdue_query_plan_uses_index(client: TestClient, db_path: Path) -> None:
+    conn = db.connect(db_path)
+    try:
+        plan = conn.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT id, book_id, member_id, loaned_at, due_on, returned_at, renewals, fine_cents
+            FROM loans
+            WHERE returned_at IS NULL AND due_on < ?
+            ORDER BY due_on, id
+            """,
+            ("2026-03-02",),
+        ).fetchall()
+        details = [row["detail"] for row in plan]
+        assert not any("SCAN loans" in d for d in details)
+        assert not any("USE TEMP B-TREE" in d for d in details)
+        assert any("SEARCH loans USING INDEX idx_loans_overdue" in d for d in details)
+    finally:
+        conn.close()
 
 
 def test_renewal_limit_of_zero_rejects_first_renewal(
