@@ -249,3 +249,96 @@ def test_list_books_exact_page_multiple(client: TestClient, library: Library) ->
     assert [b["id"] for b in p2["items"]] == [books[2]["id"], books[3]["id"]]
     assert p2["has_next"] is False
     assert p2["total"] == 4
+
+
+def test_sort_title_orders_by_title_then_id(client: TestClient, library: Library) -> None:
+    b1 = library.book(title="Zeta", isbn="9780000000001")
+    b2 = library.book(title="Alpha", isbn="9780000000002")
+    b3 = library.book(title="Alpha", isbn="9780000000003")
+    b4 = library.book(title="Beta", isbn="9780000000004")
+
+    resp = client.get("/books", params={"sort": "title"})
+    assert resp.status_code == 200
+    page = resp.json()
+    assert [b["id"] for b in page["items"]] == [b2["id"], b3["id"], b4["id"], b1["id"]]
+
+
+def test_sort_author_orders_by_author_then_title_then_id(
+    client: TestClient, library: Library
+) -> None:
+    b1 = library.book(title="Zeta", author="Bob", isbn="9780000000001")
+    b2 = library.book(title="Alpha", author="Bob", isbn="9780000000002")
+    b3 = library.book(title="Gamma", author="Alice", isbn="9780000000003")
+    b4 = library.book(title="Beta", author="Alice", isbn="9780000000004")
+
+    resp = client.get("/books", params={"sort": "author"})
+    assert resp.status_code == 200
+    page = resp.json()
+    assert [b["id"] for b in page["items"]] == [b4["id"], b3["id"], b2["id"], b1["id"]]
+
+
+def test_sort_year_orders_by_year_nulls_last_then_title_then_id(
+    client: TestClient, library: Library
+) -> None:
+    b1 = library.book(title="Book 2000", year=2000, isbn="9780000000001")
+    b2 = library.book(title="Book None Z", year=None, isbn="9780000000002")
+    b3 = library.book(title="Book 1990", year=1990, isbn="9780000000003")
+    b4 = library.book(title="Book None A", year=None, isbn="9780000000004")
+    b5 = library.book(title="Another 2000", year=2000, isbn="9780000000005")
+
+    resp = client.get("/books", params={"sort": "year"})
+    assert resp.status_code == 200
+    page = resp.json()
+    # 1990 first (b3), then 2000 by title ("Another 2000" (b5) before "Book 2000" (b1)),
+    # then nulls last by title ("Book None A" (b4) before "Book None Z" (b2))
+    assert [b["id"] for b in page["items"]] == [b3["id"], b5["id"], b1["id"], b4["id"], b2["id"]]
+
+
+def test_without_sort_order_stays_oldest_entries_first(
+    client: TestClient, library: Library
+) -> None:
+    b1 = library.book(title="Zeta", author="Zoe", year=2020, isbn="9780000000001")
+    b2 = library.book(title="Alpha", author="Adam", year=1990, isbn="9780000000002")
+    b3 = library.book(title="Beta", author="Beth", year=2000, isbn="9780000000003")
+
+    resp = client.get("/books")
+    assert resp.status_code == 200
+    page = resp.json()
+    assert [b["id"] for b in page["items"]] == [b1["id"], b2["id"], b3["id"]]
+
+
+def test_any_other_sort_value_is_422(client: TestClient) -> None:
+    assert client.get("/books", params={"sort": "invalid"}).status_code == 422
+    assert client.get("/books", params={"sort": "isbn"}).status_code == 422
+    assert client.get("/books", params={"sort": ""}).status_code == 422
+
+
+@pytest.mark.parametrize("sort_val", ["title", "author", "year"])
+def test_paging_works_the_same_with_every_sort_order(
+    client: TestClient, library: Library, sort_val: str
+) -> None:
+    # 5 books with same sort keys to verify ties are broken by id so pages are stable
+    books = [
+        library.book(title="Same Title", author="Same Author", year=2000, isbn=f"978000000000{i}")
+        for i in range(1, 6)
+    ]
+
+    p1 = client.get("/books", params={"sort": sort_val, "page": 1, "size": 2}).json()
+    assert len(p1["items"]) == 2
+    assert [b["id"] for b in p1["items"]] == [books[0]["id"], books[1]["id"]]
+    assert p1["has_next"] is True
+    assert p1["total"] == 5
+    assert p1["page"] == 1
+    assert p1["size"] == 2
+
+    p2 = client.get("/books", params={"sort": sort_val, "page": 2, "size": 2}).json()
+    assert len(p2["items"]) == 2
+    assert [b["id"] for b in p2["items"]] == [books[2]["id"], books[3]["id"]]
+    assert p2["has_next"] is True
+    assert p2["total"] == 5
+
+    p3 = client.get("/books", params={"sort": sort_val, "page": 3, "size": 2}).json()
+    assert len(p3["items"]) == 1
+    assert [b["id"] for b in p3["items"]] == [books[4]["id"]]
+    assert p3["has_next"] is False
+    assert p3["total"] == 5

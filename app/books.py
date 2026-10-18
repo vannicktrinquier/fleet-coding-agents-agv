@@ -10,7 +10,7 @@ from app.auth import require_admin
 from app.db import timestamp
 from app.deps import ClockDep, ConnDep
 from app.errors import Conflict, NotFound
-from app.models import Book, BookCreate, BookPage, BookUpdate
+from app.models import Book, BookCreate, BookPage, BookSort, BookUpdate
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -55,17 +55,31 @@ def get_book(conn: sqlite3.Connection, book_id: int) -> Book:
     return Book.model_validate(row)
 
 
-def list_books(conn: sqlite3.Connection, page: int = 1, size: int = DEFAULT_PAGE_SIZE) -> BookPage:
-    """Return one page of the catalog, oldest entries first."""
+def list_books(
+    conn: sqlite3.Connection,
+    page: int = 1,
+    size: int = DEFAULT_PAGE_SIZE,
+    sort: BookSort | None = None,
+) -> BookPage:
+    """Return one page of the catalog."""
     total = conn.execute("""SELECT COUNT(*) AS n FROM books WHERE deleted_at IS NULL""").fetchone()[
         "n"
     ]
     offset = (page - 1) * size
+    match sort:
+        case BookSort.TITLE:
+            order_clause = "ORDER BY title, id"
+        case BookSort.AUTHOR:
+            order_clause = "ORDER BY author, title, id"
+        case BookSort.YEAR:
+            order_clause = "ORDER BY year IS NULL, year, title, id"
+        case None:
+            order_clause = "ORDER BY id"
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM books
         WHERE deleted_at IS NULL
-        ORDER BY id
+        {order_clause}
         LIMIT ? OFFSET ?
         """,
         (size + 1, offset),
@@ -139,8 +153,9 @@ def get_books(
     conn: ConnDep,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    sort: BookSort | None = None,
 ) -> BookPage:
-    return list_books(conn, page=page, size=size)
+    return list_books(conn, page=page, size=size, sort=sort)
 
 
 @router.get("/search")
