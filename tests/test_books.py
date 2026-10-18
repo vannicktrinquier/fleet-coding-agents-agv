@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app import db
+from app.books import search_books
 from tests.support import Library
 
 
@@ -385,3 +389,94 @@ def test_paging_works_the_same_with_every_sort_order(
     assert [b["id"] for b in p3["items"]] == [books[4]["id"]]
     assert p3["has_next"] is False
     assert p3["total"] == 5
+
+
+def test_search_available_only_true_returns_only_matching_books_with_at_least_one_copy_available(
+    client: TestClient, library: Library
+) -> None:
+    b1 = library.book(title="Python Cookbook", copies=1)
+    b2 = library.book(title="Fluent Python", copies=2)
+    m = library.member()
+    library.checkout(b2["id"], m["id"])
+    b3 = library.book(title="Learning Python", copies=1)
+    m2 = library.member()
+    library.checkout(b3["id"], m2["id"])
+    library.book(title="Dune", copies=1)
+
+    response = client.get("/books/search", params={"q": "Python", "available_only": "true"})
+    assert response.status_code == 200
+    results = response.json()
+    assert [b["id"] for b in results] == [b2["id"], b1["id"]]
+    assert all(b["copies_available"] > 0 for b in results)
+
+
+def test_search_without_parameter_or_with_available_only_false_results_are_unchanged(
+    client: TestClient, library: Library, db_path: Path
+) -> None:
+    b1 = library.book(title="Available Python", copies=1)
+    b2 = library.book(title="Borrowed Python", copies=1)
+    m = library.member()
+    library.checkout(b2["id"], m["id"])
+
+    without_param = client.get("/books/search", params={"q": "Python"}).json()
+    with_false = client.get(
+        "/books/search", params={"q": "Python", "available_only": "false"}
+    ).json()
+
+    expected_ids = [b1["id"], b2["id"]]
+    assert [b["id"] for b in without_param] == expected_ids
+    assert without_param == with_false
+
+    # Direct call to search_books with default arguments includes unavailable books
+    conn = db.connect(db_path)
+    try:
+        direct = search_books(conn, "Python")
+        assert [b.id for b in direct] == expected_ids
+    finally:
+        conn.close()
+
+
+def test_search_limit_applies_after_filter_asking_for_5_results_returns_up_to_5_available_books(
+    client: TestClient, library: Library
+) -> None:
+    for i in range(3):
+        book = library.book(title=f"Guide {i}", copies=1)
+        m = library.member()
+        library.checkout(book["id"], m["id"])
+
+    available = []
+    for i in range(3, 8):
+        book = library.book(title=f"Guide {i}", copies=1)
+        available.append(book)
+
+    response = client.get(
+        "/books/search", params={"q": "Guide", "available_only": "true", "limit": 5}
+    )
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 5
+    assert [b["id"] for b in results] == [b["id"] for b in available]
+
+
+def test_readme_documents_the_parameter() -> None:
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        candidate = current / "README.md"
+        if candidate.exists():
+            assert "available_only" in candidate.read_text()
+            return
+        current = current.parent
+    raise FileNotFoundError("README.md not found")
+
+
+def test_search_books_default_limit(library: Library, db_path: Path) -> None:
+    # Create 21 books that match the query
+    for i in range(21):
+        library.book(title=f"Book {i} by TestAuthor", author="TestAuthor")
+
+    conn = db.connect(db_path)
+    try:
+        results = search_books(conn, "TestAuthor")
+        assert len(results) == 20
+    finally:
+        conn.close()

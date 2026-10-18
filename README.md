@@ -42,7 +42,7 @@ served at `/docs`.
 | :--- | :--- | :---: | :--- |
 | GET | `/health` | | Liveness and schema version |
 | GET | `/books?page=1&size=20&sort=...` | | The catalog, optionally sorted by `title`, `author`, or `year` |
-| GET | `/books/search?q=...&limit=20` | | Search titles and authors |
+| GET | `/books/search?q=...&limit=20&available_only=false` | | Search titles and authors |
 | GET | `/books/{id}` | | One book |
 | POST | `/books` | admin | Add a book: `isbn`, `title`, `author`, `year`, `copies` |
 | PATCH | `/books/{id}` | admin | Change `title`, `author`, `year` or `copies` |
@@ -78,7 +78,8 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
   (books without a year last, then title). Without `sort`, entries are ordered oldest
   first. Ties are broken by `id`. Any other `sort` value is a 422.
 - **Search.** Case-insensitive substring match on the title or the author, ordered
-  by title. `%` and `_` in the query are matched literally.
+  by title. `%` and `_` in the query are matched literally. Pass `available_only=true`
+  to return only books with at least one copy available.
 - **Members.** Email addresses are unique, compared case-insensitively. Deactivated
   members keep their history but cannot borrow. A member with open loans cannot be
   deactivated. Unpaid fines on returned loans do not block deactivation.

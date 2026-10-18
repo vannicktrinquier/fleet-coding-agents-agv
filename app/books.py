@@ -93,7 +93,9 @@ def list_books(
     )
 
 
-def search_books(conn: sqlite3.Connection, query: str, limit: int = 20) -> list[Book]:
+def search_books(
+    conn: sqlite3.Connection, query: str, limit: int = 20, available_only: bool = False
+) -> list[Book]:
     """Find books whose title or author contains ``query``.
 
     ``instr`` with ``lower`` is used rather than ``LIKE`` so that ``%`` and ``_``
@@ -102,11 +104,13 @@ def search_books(conn: sqlite3.Connection, query: str, limit: int = 20) -> list[
     term = query.strip().lower()
     if not term:
         return []
+    where = "deleted_at IS NULL AND (instr(lower(title), ?) > 0 OR instr(lower(author), ?) > 0)"
+    if available_only:
+        where += " AND copies_available > 0"
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM books
-        WHERE deleted_at IS NULL
-          AND (instr(lower(title), ?) > 0 OR instr(lower(author), ?) > 0)
+        WHERE {where}
         ORDER BY title, id
         LIMIT ?
         """,
@@ -164,8 +168,9 @@ def search(
     conn: ConnDep,
     q: Annotated[str, Query(min_length=1, max_length=100)],
     limit: Annotated[int, Query(ge=1, le=MAX_SEARCH_RESULTS)] = 20,
+    available_only: bool = False,
 ) -> list[Book]:
-    return search_books(conn, q, limit=limit)
+    return search_books(conn, q, limit=limit, available_only=available_only)
 
 
 @router.get("/{book_id}")
