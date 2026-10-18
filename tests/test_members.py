@@ -148,6 +148,24 @@ def test_deactivate_member_returns_409_when_member_has_open_loans_with_count(
     assert client.get(f"/members/{member['id']}").json()["active"] is True
 
 
+def test_deactivate_member_returns_409_when_member_has_1_open_loan(
+    client: TestClient, admin: dict[str, str], library: Library
+) -> None:
+    member = library.member()
+    b1 = library.book()
+    library.checkout(b1["id"], member["id"])
+
+    response = client.post(f"/members/{member['id']}/deactivate", headers=admin)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": f"member {member['id']} has 1 open loan and cannot be deactivated"
+    }
+
+    # Verify active status did not change
+    assert client.get(f"/members/{member['id']}").json()["active"] is True
+
+
 def test_deactivate_member_without_open_loans_succeeds(
     client: TestClient, admin: dict[str, str], library: Library
 ) -> None:
