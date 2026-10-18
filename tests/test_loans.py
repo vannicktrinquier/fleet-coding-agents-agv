@@ -224,6 +224,7 @@ def test_readme_documents_renewal_limit_and_configuration() -> None:
         assert "LIBRARY_MAX_RENEWALS" in content
         assert "renewed at most twice" in content or "renewal limit" in content
 
+
 def test_renewal_on_due_date_succeeds(
     client: TestClient, clock: FixedClock, library: Library
 ) -> None:
@@ -254,6 +255,18 @@ def test_overdue_loan_cannot_be_renewed(
 
     fines = client.get(f"/members/{loan['member_id']}/fines").json()
     assert fines["total_cents"] == 250
+
+
+def test_one_day_overdue_loan_cannot_be_renewed(
+    client: TestClient, clock: FixedClock, library: Library
+) -> None:
+    loan = library.checkout(library.book()["id"], library.member()["id"])
+    clock.advance(days=15)
+
+    response = client.post(f"/loans/{loan['id']}/renew")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": f"loan {loan['id']} is overdue"}
 
 
 def test_get_loan(client: TestClient, library: Library) -> None:
