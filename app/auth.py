@@ -20,6 +20,9 @@ def require_admin(
     The key is set with ``LIBRARY_ADMIN_KEY`` and sent in the ``X-API-Key``
     header. Comparison is constant-time.
     """
-    expected = settings.admin_api_key.encode()
-    if not hmac.compare_digest(x_api_key.strip().encode(), expected):
+    expected = settings.admin_api_key.strip().encode()
+    if not expected:
+        raise Unauthorized("admin key is not configured")
+    provided = x_api_key.strip().encode()
+    if not provided or not hmac.compare_digest(provided, expected):
         raise Unauthorized("missing or invalid API key")
