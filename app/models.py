@@ -149,6 +149,7 @@ class BookStats(BaseModel):
 class MemberStats(BaseModel):
     total: int
     active: int
+    with_overdue: int
 
 
 class LoanStats(BaseModel):

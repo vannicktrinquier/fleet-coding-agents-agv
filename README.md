@@ -92,7 +92,8 @@ the request and `422` for invalid input. Money is in cents. Dates and times are 
 - **Reports.** Both reports require the admin key.
   `GET /reports/summary` returns a generation timestamp (`generated_at`), catalog
   totals (`books`: `titles`, `copies`, `available`, `on_loan`), member counts
-  (`members`: `total`, `active`), loan activity (`loans`: `open`, `overdue`,
+  (`members`: `total`, `active`, `with_overdue`: distinct members with at least one
+  open loan past its due date), loan activity (`loans`: `open`, `overdue`,
   `returned_last_30_days`), and `outstanding_fines_cents` (unpaid fines on returned
   loans only; fines still accruing are excluded). Deleted books are excluded from
   the summary counts.
