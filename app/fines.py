@@ -6,6 +6,7 @@ books that are still out keep growing until the book comes back. Amounts are
 in cents.
 """
 
+import re
 import sqlite3
 from datetime import date, datetime
 
@@ -37,6 +38,15 @@ def format_cents(cents: int) -> str:
     sign = "-" if cents < 0 else ""
     total = abs(cents)
     return f"{sign}${total // 100}.{total % 100:02d}"
+
+
+def parse_cents(text: str) -> int:
+    match = re.fullmatch(r"(-?)\$([0-9]+)(?:\.([0-9]{2}))?", text.strip())
+    if match is None:
+        raise ValueError(f"invalid amount: {text!r}")
+    sign, dollars, cents = match.groups()
+    total = int(dollars) * 100 + int(cents or 0)
+    return -total if sign == "-" else total
 
 
 def member_fines(
