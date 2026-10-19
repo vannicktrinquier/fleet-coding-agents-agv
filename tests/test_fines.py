@@ -37,6 +37,14 @@ def test_compute_fine(on: date, expected: int) -> None:
     assert compute_fine(DUE, on, POLICY) == expected
 
 
+def test_compute_fine_zero_grace_days_respects_cap() -> None:
+    policy = FinePolicy(grace_days=0, daily_cents=25, cap_cents=100)
+    assert compute_fine(DUE, DUE, policy) == 0
+    assert compute_fine(DUE, date(2026, 3, 17), policy) == 25
+    assert compute_fine(DUE, date(2026, 3, 20), policy) == 100
+    assert compute_fine(DUE, date(2026, 3, 26), policy) == 100
+
+
 def test_is_at_fine_cap_on_time_returns() -> None:
     assert is_at_fine_cap(DUE, date(2026, 3, 10), POLICY) is False
     assert is_at_fine_cap(DUE, DUE, POLICY) is False
