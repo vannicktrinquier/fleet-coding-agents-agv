@@ -34,7 +34,9 @@ def compute_fine(due_on: date, on: date, policy: FinePolicy) -> int:
 
 
 def format_cents(cents: int) -> str:
-    return f"${cents // 100}.{cents % 100:02d}"
+    sign = "-" if cents < 0 else ""
+    total = abs(cents)
+    return f"{sign}${total // 100}.{total % 100:02d}"
 
 
 def member_fines(
