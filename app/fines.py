@@ -36,6 +36,11 @@ def compute_fine(due_on: date, on: date, policy: FinePolicy) -> int:
     return 0
 
 
+def is_at_fine_cap(due_on: date, on: date, policy: FinePolicy) -> bool:
+    """Whether the fine for a book due on ``due_on`` has reached the policy cap on ``on``."""
+    return policy.cap_cents > 0 and compute_fine(due_on, on, policy) >= policy.cap_cents
+
+
 def format_cents(cents: int) -> str:
     sign = "-" if cents < 0 else ""
     total = abs(cents)

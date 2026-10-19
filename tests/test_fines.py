@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.clock import FixedClock
 from app.config import FinePolicy
-from app.fines import compute_fine, days_late, format_cents, parse_cents
+from app.fines import compute_fine, days_late, format_cents, is_at_fine_cap, parse_cents
 from tests.support import Library
 
 POLICY = FinePolicy(grace_days=3, daily_cents=25, cap_cents=1000)
@@ -35,6 +35,34 @@ DUE = date(2026, 3, 16)
 )
 def test_compute_fine(on: date, expected: int) -> None:
     assert compute_fine(DUE, on, POLICY) == expected
+
+
+def test_is_at_fine_cap_on_time_returns() -> None:
+    assert is_at_fine_cap(DUE, date(2026, 3, 10), POLICY) is False
+    assert is_at_fine_cap(DUE, DUE, POLICY) is False
+    assert is_at_fine_cap(DUE, date(2026, 3, 19), POLICY) is False
+
+
+def test_is_at_fine_cap_below_cap() -> None:
+    assert is_at_fine_cap(DUE, date(2026, 3, 20), POLICY) is False
+    assert is_at_fine_cap(DUE, date(2026, 4, 24), POLICY) is False
+
+
+def test_is_at_fine_cap_at_cap() -> None:
+    assert is_at_fine_cap(DUE, date(2026, 4, 25), POLICY) is True
+    assert is_at_fine_cap(DUE, date(2026, 6, 1), POLICY) is True
+
+
+def test_is_at_fine_cap_with_zero_or_custom_cap() -> None:
+    zero_cap = FinePolicy(grace_days=3, daily_cents=25, cap_cents=0)
+    assert is_at_fine_cap(DUE, DUE, zero_cap) is False
+    assert is_at_fine_cap(DUE, date(2026, 6, 1), zero_cap) is False
+
+    one_cent_cap = FinePolicy(grace_days=3, daily_cents=1, cap_cents=1)
+    assert is_at_fine_cap(DUE, date(2026, 3, 20), one_cent_cap) is True
+
+    no_grace_small_cap = FinePolicy(grace_days=0, daily_cents=25, cap_cents=10)
+    assert is_at_fine_cap(DUE, date(2026, 3, 20), no_grace_small_cap) is True
 
 
 def test_days_late_is_never_negative() -> None:
