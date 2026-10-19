@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.clock import FixedClock
 from app.config import FinePolicy
-from app.fines import compute_fine, days_late, format_cents
+from app.fines import compute_fine, days_late, format_cents, parse_cents
 from tests.support import Library
 
 POLICY = FinePolicy(grace_days=3, daily_cents=25, cap_cents=1000)
@@ -52,6 +52,66 @@ def test_format_cents() -> None:
     assert format_cents(-5) == "-$0.05"
     assert format_cents(-100) == "-$1.00"
     assert format_cents(-150) == "-$1.50"
+
+
+def test_parse_cents() -> None:
+    assert parse_cents("$12.34") == 1234
+    assert parse_cents("$0.05") == 5
+    assert parse_cents("-$1.50") == -150
+    assert parse_cents("$7") == 700
+    assert parse_cents("-$7") == -700
+    assert parse_cents("$0.00") == 0
+
+
+def test_parse_cents_ignores_leading_and_trailing_whitespace() -> None:
+    assert parse_cents("  $12.34  ") == 1234
+    assert parse_cents("\t-$1.50\n") == -150
+    assert parse_cents(" $7 ") == 700
+
+
+@pytest.mark.parametrize(
+    "bad_input",
+    [
+        "12.34",
+        "$12.345",
+        "$abc",
+        "abc",
+        "$12.ab",
+        "",
+        "   ",
+        "$12.3",
+        "$12.",
+        "$.50",
+        "$-1.50",
+    ],
+    ids=[
+        "missing-dollar-sign",
+        "more-than-two-decimal-places",
+        "letters-after-dollar",
+        "letters-only",
+        "letters-in-cents",
+        "empty-string",
+        "whitespace-only",
+        "one-decimal-place",
+        "trailing-decimal-point",
+        "missing-dollar-digits",
+        "sign-after-dollar",
+    ],
+)
+def test_parse_cents_rejects_invalid_input(bad_input: str) -> None:
+    with pytest.raises(ValueError) as exc_info:
+        parse_cents(bad_input)
+    message = str(exc_info.value)
+    assert bad_input in message
+    assert message == f"invalid amount: {bad_input!r}"
+
+
+@pytest.mark.parametrize(
+    "cents",
+    [-123456, -1000, -150, -100, -5, -1, 0, 1, 5, 99, 100, 700, 1234, 987654],
+)
+def test_parse_cents_round_trips_with_format_cents(cents: int) -> None:
+    assert parse_cents(format_cents(cents)) == cents
 
 
 def test_member_fines_list_settled_and_accruing_fines(
