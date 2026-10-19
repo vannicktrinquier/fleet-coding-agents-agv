@@ -77,9 +77,9 @@ def test_migrations_apply_once(tmp_path: Path) -> None:
     path = tmp_path / "library.db"
     moment = datetime(2026, 3, 2, tzinfo=UTC)
 
-    assert db.migrate(path, moment) == ["001_init"]
+    assert db.migrate(path, moment) == ["001_init", "002_index_loans_overdue"]
     assert db.migrate(path, moment) == []
-    assert db.schema_version(path) == "001_init"
+    assert db.schema_version(path) == "002_index_loans_overdue"
 
 
 def test_schema_version_of_an_empty_database(tmp_path: Path) -> None:
@@ -96,4 +96,8 @@ def test_health(client: TestClient) -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": __version__, "schema": "001_init"}
+    assert response.json() == {
+        "status": "ok",
+        "version": __version__,
+        "schema": "002_index_loans_overdue",
+    }
