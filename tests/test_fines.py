@@ -45,7 +45,13 @@ def test_days_late_is_never_negative() -> None:
 def test_format_cents() -> None:
     assert format_cents(0) == "$0.00"
     assert format_cents(5) == "$0.05"
+    assert format_cents(100) == "$1.00"
+    assert format_cents(1234) == "$12.34"
     assert format_cents(1250) == "$12.50"
+    assert format_cents(-1) == "-$0.01"
+    assert format_cents(-5) == "-$0.05"
+    assert format_cents(-100) == "-$1.00"
+    assert format_cents(-150) == "-$1.50"
 
 
 def test_member_fines_list_settled_and_accruing_fines(
