@@ -31,7 +31,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          enable-cache: false
+          # Keep uv's download cache between runs; a change to a requirements file starts a new one.
+          enable-cache: true
+          cache-dependency-glob: "requirements*.txt"
 
       - name: Install dependencies
         id: setup
@@ -62,7 +64,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          enable-cache: false
+          # Keep uv's download cache between runs; a change to a requirements file starts a new one.
+          enable-cache: true
+          cache-dependency-glob: "requirements*.txt"
 
       - name: Install dependencies
         id: setup
