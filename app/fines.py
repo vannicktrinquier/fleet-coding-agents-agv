@@ -29,6 +29,8 @@ def days_late(due_on: date, on: date) -> int:
 def compute_fine(due_on: date, on: date, policy: FinePolicy) -> int:
     """Fine for a book due on ``due_on`` and returned (or still out) on ``on``."""
     late = days_late(due_on, on)
+    if policy.grace_days == 0:
+        return late * policy.daily_cents
     if late > policy.grace_days:
         return min(late * policy.daily_cents, policy.cap_cents)
     return 0
